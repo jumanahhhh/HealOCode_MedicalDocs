@@ -209,6 +209,9 @@ export class MemStorage implements IStorage {
     const record: MedicalRecord = { 
       ...insertRecord,
       summary: insertRecord.summary ?? null,
+      file: insertRecord.file ?? null,
+      fileName: insertRecord.fileName ?? null,
+      fileType: insertRecord.fileType ?? null,
       id,
       createdAt: now,
       updatedAt: now,

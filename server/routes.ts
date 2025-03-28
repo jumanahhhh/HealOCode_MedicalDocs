@@ -162,6 +162,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   
   app.post('/api/medical-records', async (req: Request, res: Response) => {
     try {
+      // Handle file upload data along with other record data
       const recordData = insertMedicalRecordSchema.parse(req.body);
       const record = await storage.createMedicalRecord(recordData);
       
