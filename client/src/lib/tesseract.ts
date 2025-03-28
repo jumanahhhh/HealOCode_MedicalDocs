@@ -1,31 +1,29 @@
-import { createWorker } from 'tesseract.js';
+import * as Tesseract from 'tesseract.js';
+import { addNotification } from './notification';
 
-// Configuration for OCR
-const ocrWorker = createWorker();
-
-// Initialize the worker
-let workerInitialized = false;
-
-const initializeWorker = async () => {
-  if (!workerInitialized) {
-    await ocrWorker.load();
-    await ocrWorker.loadLanguage('eng');
-    await ocrWorker.initialize('eng');
-    workerInitialized = true;
-  }
-};
+// Processing state flag
+let isProcessing = false;
 
 // Function to extract text from an image
 export const extractTextFromImage = async (imageUrl: string): Promise<{ text: string, confidence: number }> => {
+  if (isProcessing) {
+    throw new Error('OCR is already processing an image');
+  }
+  
+  isProcessing = true;
+  
   try {
-    await initializeWorker();
+    const worker = await Tesseract.createWorker('eng');
+    const result = await worker.recognize(imageUrl);
+    await worker.terminate();
     
-    const result = await ocrWorker.recognize(imageUrl);
+    isProcessing = false;
     return {
       text: result.data.text,
       confidence: result.data.confidence
     };
   } catch (error) {
+    isProcessing = false;
     console.error('OCR Error:', error);
     throw new Error('Failed to extract text from the image');
   }
@@ -64,26 +62,59 @@ export const extractMedications = (text: string): { name?: string, dosage?: stri
   return medications;
 };
 
-// Cleanup worker when app is closed
+// Cleanup function (not needed with per-operation worker)
 export const terminateWorker = async () => {
-  if (workerInitialized) {
-    await ocrWorker.terminate();
-    workerInitialized = false;
-  }
+  isProcessing = false;
 };
 
 // Mock function to demonstrate OCR without actually processing - for UI demos
 export const mockOcrProcess = async (imageUrl: string): Promise<{ text: string, medications: any[] }> => {
+  if (isProcessing) {
+    throw new Error('OCR is already processing an image');
+  }
+  
+  isProcessing = true;
+  console.log("Processing image:", imageUrl.substring(0, 50) + "...");
+  
   // Simulate processing delay
   await new Promise(resolve => setTimeout(resolve, 1500));
   
-  // Return mock data
-  return {
-    text: "Patient: Emma Wilson\nDOB: 05/12/1989\nRx: Atorvastatin 20mg\nSig: 1 tablet daily at bedtime\nQty: 30\nRefills: 3",
-    medications: [{
+  // Create a sample prescription text with current date
+  const currentDate = new Date().toLocaleDateString();
+  const prescriptionText = `Patient: Emma Wilson
+DOB: 05/12/1989
+Date: ${currentDate}
+
+Rx: Atorvastatin 20mg
+Sig: 1 tablet daily at bedtime
+Qty: 30
+Refills: 3
+
+Rx: Lisinopril 10mg
+Sig: 1 tablet daily
+Qty: 30
+Refills: 3`;
+  
+  // Sample medications extracted from the text
+  const medications = [
+    {
       name: "Atorvastatin",
       dosage: "20mg",
       frequency: "daily at bedtime"
-    }]
+    },
+    {
+      name: "Lisinopril",
+      dosage: "10mg",
+      frequency: "daily"
+    }
+  ];
+  
+  // Generate a notification about the processed prescription
+  addNotification('Prescription Processed', 'New prescription for Emma Wilson has been processed successfully');
+  
+  isProcessing = false;
+  return {
+    text: prescriptionText,
+    medications: medications
   };
 };

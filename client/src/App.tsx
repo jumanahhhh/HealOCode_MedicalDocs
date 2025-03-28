@@ -8,6 +8,7 @@ import ScanPrescription from "@/pages/ScanPrescription";
 import PatientRecords from "@/pages/PatientRecords";
 import PostSurgery from "@/pages/PostSurgery";
 import SecurityCenter from "@/pages/SecurityCenter";
+import NotificationsSystem from "@/components/layout/Notifications";
 import { useState, useEffect } from "react";
 
 function Router() {
@@ -50,6 +51,7 @@ function App() {
       <div className="bg-[#f5f7fa] min-h-screen">
         <Router />
       </div>
+      <NotificationsSystem />
       <Toaster />
     </QueryClientProvider>
   );

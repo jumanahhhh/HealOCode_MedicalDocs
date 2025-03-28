@@ -10,40 +10,50 @@ export default function Sidebar() {
   return (
     <aside className="w-16 md:w-64 bg-white shadow-lg flex-shrink-0">
       <nav className="mt-5 px-2 space-y-1">
-        <Link href="/">
-          <a className={`sidebar-link group flex items-center px-2 py-3 text-sm font-medium rounded-md ${isActive('/') ? 'active bg-primary-50 border-l-4 border-primary' : ''}`}>
-            <span className={`material-icons ${isActive('/') ? 'text-primary' : 'text-neutral-400'} mr-3`}>dashboard</span>
-            <span className={`hidden md:block ${isActive('/') ? 'text-neutral-700' : 'text-neutral-600'}`}>Dashboard</span>
-          </a>
-        </Link>
+        <div className={`sidebar-link ${isActive('/') ? 'active bg-primary-50 border-l-4 border-primary' : ''}`}>
+          <Link href="/">
+            <div className="flex items-center px-2 py-3 text-sm font-medium rounded-md cursor-pointer">
+              <span className={`material-icons ${isActive('/') ? 'text-primary' : 'text-neutral-400'} mr-3`}>dashboard</span>
+              <span className={`hidden md:block ${isActive('/') ? 'text-neutral-700' : 'text-neutral-600'}`}>Dashboard</span>
+            </div>
+          </Link>
+        </div>
         
-        <Link href="/patients">
-          <a className={`sidebar-link group flex items-center px-2 py-3 text-sm font-medium rounded-md ${isActive('/patients') ? 'active bg-primary-50 border-l-4 border-primary' : ''}`}>
-            <span className={`material-icons ${isActive('/patients') ? 'text-primary' : 'text-neutral-400'} mr-3`}>description</span>
-            <span className={`hidden md:block ${isActive('/patients') ? 'text-neutral-700' : 'text-neutral-600'}`}>Patient Records</span>
-          </a>
-        </Link>
+        <div className={`sidebar-link ${isActive('/patients') ? 'active bg-primary-50 border-l-4 border-primary' : ''}`}>
+          <Link href="/patients">
+            <div className="flex items-center px-2 py-3 text-sm font-medium rounded-md cursor-pointer">
+              <span className={`material-icons ${isActive('/patients') ? 'text-primary' : 'text-neutral-400'} mr-3`}>description</span>
+              <span className={`hidden md:block ${isActive('/patients') ? 'text-neutral-700' : 'text-neutral-600'}`}>Patient Records</span>
+            </div>
+          </Link>
+        </div>
         
-        <Link href="/prescriptions">
-          <a className={`sidebar-link group flex items-center px-2 py-3 text-sm font-medium rounded-md ${isActive('/prescriptions') ? 'active bg-primary-50 border-l-4 border-primary' : ''}`}>
-            <span className={`material-icons ${isActive('/prescriptions') ? 'text-primary' : 'text-neutral-400'} mr-3`}>camera_alt</span>
-            <span className={`hidden md:block ${isActive('/prescriptions') ? 'text-neutral-700' : 'text-neutral-600'}`}>Scan Prescriptions</span>
-          </a>
-        </Link>
+        <div className={`sidebar-link ${isActive('/prescriptions') ? 'active bg-primary-50 border-l-4 border-primary' : ''}`}>
+          <Link href="/prescriptions">
+            <div className="flex items-center px-2 py-3 text-sm font-medium rounded-md cursor-pointer">
+              <span className={`material-icons ${isActive('/prescriptions') ? 'text-primary' : 'text-neutral-400'} mr-3`}>camera_alt</span>
+              <span className={`hidden md:block ${isActive('/prescriptions') ? 'text-neutral-700' : 'text-neutral-600'}`}>Scan Prescriptions</span>
+            </div>
+          </Link>
+        </div>
         
-        <Link href="/post-surgery">
-          <a className={`sidebar-link group flex items-center px-2 py-3 text-sm font-medium rounded-md ${isActive('/post-surgery') ? 'active bg-primary-50 border-l-4 border-primary' : ''}`}>
-            <span className={`material-icons ${isActive('/post-surgery') ? 'text-primary' : 'text-neutral-400'} mr-3`}>healing</span>
-            <span className={`hidden md:block ${isActive('/post-surgery') ? 'text-neutral-700' : 'text-neutral-600'}`}>Post-Surgery Docs</span>
-          </a>
-        </Link>
+        <div className={`sidebar-link ${isActive('/post-surgery') ? 'active bg-primary-50 border-l-4 border-primary' : ''}`}>
+          <Link href="/post-surgery">
+            <div className="flex items-center px-2 py-3 text-sm font-medium rounded-md cursor-pointer">
+              <span className={`material-icons ${isActive('/post-surgery') ? 'text-primary' : 'text-neutral-400'} mr-3`}>healing</span>
+              <span className={`hidden md:block ${isActive('/post-surgery') ? 'text-neutral-700' : 'text-neutral-600'}`}>Post-Surgery Docs</span>
+            </div>
+          </Link>
+        </div>
         
-        <Link href="/security">
-          <a className={`sidebar-link group flex items-center px-2 py-3 text-sm font-medium rounded-md ${isActive('/security') ? 'active bg-primary-50 border-l-4 border-primary' : ''}`}>
-            <span className={`material-icons ${isActive('/security') ? 'text-primary' : 'text-neutral-400'} mr-3`}>security</span>
-            <span className={`hidden md:block ${isActive('/security') ? 'text-neutral-700' : 'text-neutral-600'}`}>Security Center</span>
-          </a>
-        </Link>
+        <div className={`sidebar-link ${isActive('/security') ? 'active bg-primary-50 border-l-4 border-primary' : ''}`}>
+          <Link href="/security">
+            <div className="flex items-center px-2 py-3 text-sm font-medium rounded-md cursor-pointer">
+              <span className={`material-icons ${isActive('/security') ? 'text-primary' : 'text-neutral-400'} mr-3`}>security</span>
+              <span className={`hidden md:block ${isActive('/security') ? 'text-neutral-700' : 'text-neutral-600'}`}>Security Center</span>
+            </div>
+          </Link>
+        </div>
       </nav>
       
       <div className="mt-8 px-3 hidden md:block">

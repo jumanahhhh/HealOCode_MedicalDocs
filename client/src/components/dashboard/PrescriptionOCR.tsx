@@ -1,29 +1,84 @@
-import { useState, useRef, ChangeEvent } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useState, useRef, ChangeEvent, useEffect } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { extractTextFromImage, extractMedications, mockOcrProcess } from '@/lib/tesseract';
+import { apiRequest } from '@/lib/queryClient';
+import { addNotification } from '@/lib/notification';
 
 export default function PrescriptionOCR() {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [ocrResult, setOcrResult] = useState<{text: string, medications: any[]} | null>(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const queryClient = useQueryClient();
   
-  const { data: recentScans, isLoading } = useQuery({
+  const { data: recentScans = [], isLoading } = useQuery<any[]>({
     queryKey: ['/api/prescriptions/recent'],
     staleTime: 60000, // 1 minute
   });
   
+  // Mutation for saving the prescription
+  const savePrescription = useMutation({
+    mutationFn: async (data: any) => {
+      return apiRequest('POST', '/api/prescriptions', data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/prescriptions/recent'] });
+      // Add notification
+      addNotification('Prescription Saved', 'The processed prescription has been saved to patient records');
+    }
+  });
+  
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    setUploadError(null);
+    setUploadProgress(0);
+    
     if (e.target.files && e.target.files[0]) {
       const selectedFile = e.target.files[0];
+      
+      // Check file type
+      const validTypes = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'];
+      if (!validTypes.includes(selectedFile.type)) {
+        setUploadError('Please upload a valid image file (JPG, PNG) or PDF');
+        return;
+      }
+      
+      // Check file size (max 5MB)
+      const maxSize = 5 * 1024 * 1024; // 5MB
+      if (selectedFile.size > maxSize) {
+        setUploadError('File is too large. Maximum size is 5MB');
+        return;
+      }
+      
       setFile(selectedFile);
       
-      // Create preview
+      // Create preview with progress simulation
+      const simulateProgress = () => {
+        let progress = 0;
+        const interval = setInterval(() => {
+          progress += 5;
+          if (progress > 95) {
+            clearInterval(interval);
+          } else {
+            setUploadProgress(progress);
+          }
+        }, 50);
+      };
+      
+      simulateProgress();
+      
       const reader = new FileReader();
       reader.onload = (event) => {
         setPreview(event.target?.result as string);
+        setUploadProgress(100);
+        
+        // Reset progress after a short delay
+        setTimeout(() => {
+          setUploadProgress(0);
+        }, 500);
       };
       reader.readAsDataURL(selectedFile);
     }
@@ -31,15 +86,48 @@ export default function PrescriptionOCR() {
   
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
+    setUploadError(null);
     
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const droppedFile = e.dataTransfer.files[0];
+      
+      // Check file type
+      const validTypes = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'];
+      if (!validTypes.includes(droppedFile.type)) {
+        setUploadError('Please upload a valid image file (JPG, PNG) or PDF');
+        return;
+      }
+      
+      // Check file size (max 5MB)
+      const maxSize = 5 * 1024 * 1024; // 5MB
+      if (droppedFile.size > maxSize) {
+        setUploadError('File is too large. Maximum size is 5MB');
+        return;
+      }
+      
       setFile(droppedFile);
       
-      // Create preview
+      // Simulate upload progress
+      let progress = 0;
+      const interval = setInterval(() => {
+        progress += 5;
+        if (progress > 95) {
+          clearInterval(interval);
+        } else {
+          setUploadProgress(progress);
+        }
+      }, 50);
+      
       const reader = new FileReader();
       reader.onload = (event) => {
         setPreview(event.target?.result as string);
+        setUploadProgress(100);
+        
+        // Reset progress after a short delay
+        setTimeout(() => {
+          setUploadProgress(0);
+          clearInterval(interval);
+        }, 500);
       };
       reader.readAsDataURL(droppedFile);
     }
@@ -53,15 +141,30 @@ export default function PrescriptionOCR() {
     if (!file || !preview) return;
     
     setIsProcessing(true);
+    setOcrResult(null);
     
     try {
       // In a production app, this would call the real OCR API
       // For this demo, we'll use a mock function
       const result = await mockOcrProcess(preview);
       setOcrResult(result);
+      
+      // Auto-save the processed prescription
+      if (result) {
+        savePrescription.mutate({
+          patientId: 1, // Default to first patient for demo
+          prescriptionId: `RX-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
+          doctorName: "Dr. Sarah Chen",
+          scannedAt: new Date().toISOString(),
+          imageUrl: preview.substring(0, 50) + "...", // Truncated for demo
+          extractedText: result.text,
+          medications: result.medications,
+          isProcessed: true
+        });
+      }
     } catch (error) {
       console.error('Error processing image:', error);
-      alert('Error processing image. Please try again.');
+      setUploadError('Error processing image. Please try again.');
     } finally {
       setIsProcessing(false);
     }
@@ -75,7 +178,22 @@ export default function PrescriptionOCR() {
   
   const handleViewScan = (scan: any) => {
     // In a real app, this would show the scan details
-    alert(`Viewing scan ${scan.prescriptionId}`);
+    addNotification('Prescription Viewed', `Viewing prescription ${scan.prescriptionId}`);
+  };
+  
+  const handleSavePrescription = () => {
+    if (!ocrResult) return;
+    
+    savePrescription.mutate({
+      patientId: 1, // Default to first patient for demo
+      prescriptionId: `RX-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
+      doctorName: "Dr. Sarah Chen",
+      scannedAt: new Date().toISOString(),
+      imageUrl: preview,
+      extractedText: ocrResult.text,
+      medications: ocrResult.medications,
+      isProcessed: true
+    });
   };
   
   return (
