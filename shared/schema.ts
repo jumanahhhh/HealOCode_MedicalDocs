@@ -17,6 +17,7 @@ export const patients = pgTable("patients", {
   name: text("name").notNull(),
   dateOfBirth: text("date_of_birth").notNull(),
   gender: text("gender").notNull(),
+  userId: integer("user_id"), // Optional: associate with a user account
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -87,6 +88,7 @@ export const insertPatientSchema = createInsertSchema(patients).pick({
   name: true,
   dateOfBirth: true,
   gender: true,
+  userId: true,
 });
 
 export const insertMedicalRecordSchema = createInsertSchema(medicalRecords).pick({

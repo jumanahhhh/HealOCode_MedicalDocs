@@ -8,13 +8,22 @@ import ScanPrescription from "@/pages/ScanPrescription";
 import PatientRecords from "@/pages/PatientRecords";
 import PostSurgery from "@/pages/PostSurgery";
 import SecurityCenter from "@/pages/SecurityCenter";
+import PatientDashboard from "@/pages/PatientDashboard";
 import NotificationsSystem from "@/components/layout/Notifications";
 import { useState, useEffect } from "react";
 
-function Router() {
+type RouterProps = {
+  userRole?: string;
+};
+
+function Router({ userRole = "doctor" }: RouterProps) {
+  // Check if user role is patient or doctor
+  const isPatient = userRole === "patient";
+
   return (
     <Switch>
-      <Route path="/" component={Dashboard} />
+      <Route path="/" component={isPatient ? PatientDashboard : Dashboard} />
+      <Route path="/patient-dashboard" component={PatientDashboard} />
       <Route path="/prescriptions" component={ScanPrescription} />
       <Route path="/patients" component={PatientRecords} />
       <Route path="/post-surgery" component={PostSurgery} />
@@ -49,7 +58,7 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <div className="bg-[#f5f7fa] min-h-screen">
-        <Router />
+        <Router userRole={user?.role} />
       </div>
       <NotificationsSystem />
       <Toaster />

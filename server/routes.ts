@@ -74,6 +74,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return res.json(patient);
   });
   
+  // Get patient data for the logged-in patient user
+  app.get('/api/my-patient-profile', async (req: Request, res: Response) => {
+    const userId = parseInt(req.query.userId as string);
+    
+    if (!userId) {
+      return res.status(400).json({ message: 'User ID is required' });
+    }
+    
+    // First, get the user to check if they are a patient
+    const user = await storage.getUser(userId);
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    if (user.role !== 'patient') {
+      return res.status(403).json({ message: 'Only patients can access their profile' });
+    }
+    
+    // Get the patient record associated with this user
+    const patient = await storage.getPatientByUserId(userId);
+    
+    if (!patient) {
+      return res.status(404).json({ message: 'Patient profile not found' });
+    }
+    
+    return res.json(patient);
+  });
+  
   app.post('/api/patients', async (req: Request, res: Response) => {
     try {
       const patientData = insertPatientSchema.parse(req.body);
@@ -88,6 +117,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/patients/:patientId/records', async (req: Request, res: Response) => {
     const patientId = parseInt(req.params.patientId);
     const records = await storage.getMedicalRecordsByPatient(patientId);
+    return res.json(records);
+  });
+  
+  // Get medical records for a patient user
+  app.get('/api/my-medical-records', async (req: Request, res: Response) => {
+    const userId = parseInt(req.query.userId as string);
+    
+    if (!userId) {
+      return res.status(400).json({ message: 'User ID is required' });
+    }
+    
+    // Check if the user is a patient
+    const user = await storage.getUser(userId);
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    if (user.role !== 'patient') {
+      return res.status(403).json({ message: 'Only patients can access their medical records this way' });
+    }
+    
+    // Get the patient record associated with this user
+    const patient = await storage.getPatientByUserId(userId);
+    
+    if (!patient) {
+      return res.status(404).json({ message: 'Patient profile not found' });
+    }
+    
+    // Get the medical records for this patient
+    const records = await storage.getMedicalRecordsByPatient(patient.id);
+    
+    // Log access
+    await storage.createAccessLog({
+      userId,
+      recordId: null,
+      recordType: 'medical_records',
+      action: 'view_own_records'
+    });
+    
     return res.json(records);
   });
   

@@ -18,6 +18,7 @@ export interface IStorage {
   // Patients
   getPatient(id: number): Promise<Patient | undefined>;
   getPatientByPatientId(patientId: string): Promise<Patient | undefined>;
+  getPatientByUserId(userId: number): Promise<Patient | undefined>;
   getPatients(): Promise<Patient[]>;
   getRecentPatients(limit: number): Promise<Patient[]>;
   createPatient(patient: InsertPatient): Promise<Patient>;
@@ -93,7 +94,7 @@ export class MemStorage implements IStorage {
     
     this.surgeryTemplates = ['Appendectomy', 'Cholecystectomy', 'Total Knee Replacement', 'Hernia Repair'];
     
-    // Add default user
+    // Add default users
     this.createUser({
       username: 'doctor',
       password: 'password',
@@ -101,12 +102,21 @@ export class MemStorage implements IStorage {
       role: 'doctor'
     });
     
+    // Add a default patient user
+    this.createUser({
+      username: 'patient',
+      password: 'password',
+      name: 'Emma Wilson',
+      role: 'patient'
+    });
+    
     // Add sample patients
     this.createPatient({
       patientId: 'P-2023-0456',
       name: 'Emma Wilson',
       dateOfBirth: '1989-05-12',
-      gender: 'Female'
+      gender: 'Female',
+      userId: 2 // This connects to the patient user (Emma Wilson)
     });
     
     this.createPatient({
@@ -138,7 +148,9 @@ export class MemStorage implements IStorage {
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = this.userId++;
     const now = new Date();
-    const user: User = { ...insertUser, id, createdAt: now };
+    // Ensure role is always defined
+    const role = insertUser.role || 'doctor';
+    const user: User = { ...insertUser, role, id, createdAt: now };
     this.usersMap.set(id, user);
     return user;
   }
@@ -151,6 +163,12 @@ export class MemStorage implements IStorage {
   async getPatientByPatientId(patientId: string): Promise<Patient | undefined> {
     return Array.from(this.patientsMap.values()).find(
       (patient) => patient.patientId === patientId,
+    );
+  }
+  
+  async getPatientByUserId(userId: number): Promise<Patient | undefined> {
+    return Array.from(this.patientsMap.values()).find(
+      (patient) => patient.userId === userId,
     );
   }
 
@@ -167,7 +185,9 @@ export class MemStorage implements IStorage {
   async createPatient(insertPatient: InsertPatient): Promise<Patient> {
     const id = this.patientId++;
     const now = new Date();
-    const patient: Patient = { ...insertPatient, id, createdAt: now };
+    // Ensure userId is always defined as null if not provided
+    const userId = insertPatient.userId === undefined ? null : insertPatient.userId;
+    const patient: Patient = { ...insertPatient, userId, id, createdAt: now };
     this.patientsMap.set(id, patient);
     return patient;
   }
@@ -187,12 +207,13 @@ export class MemStorage implements IStorage {
     const id = this.medicalRecordId++;
     const now = new Date();
     const record: MedicalRecord = { 
-      ...insertRecord, 
+      ...insertRecord,
+      summary: insertRecord.summary ?? null,
       id,
       createdAt: now,
       updatedAt: now,
       isVerified: false,
-      blockchainHash: undefined
+      blockchainHash: null // Initialize as null instead of undefined
     };
     
     this.medicalRecordsMap.set(id, record);
@@ -249,11 +270,14 @@ export class MemStorage implements IStorage {
   async createPrescription(insertPrescription: InsertPrescription): Promise<Prescription> {
     const id = this.prescriptionId++;
     const now = new Date();
+    // Handle optional fields with default values
     const prescription: Prescription = { 
-      ...insertPrescription, 
+      ...insertPrescription,
+      extractedText: insertPrescription.extractedText ?? null,
+      medications: insertPrescription.medications ?? {},
       id,
       scannedAt: now,
-      isProcessed: false,
+      isProcessed: false
     };
     
     this.prescriptionsMap.set(id, prescription);
@@ -294,7 +318,8 @@ export class MemStorage implements IStorage {
     const id = this.surgeryDocumentId++;
     const now = new Date();
     const document: SurgeryDocument = { 
-      ...insertDocument, 
+      ...insertDocument,
+      findings: insertDocument.findings ?? null,
       id,
       createdAt: now
     };
@@ -307,8 +332,11 @@ export class MemStorage implements IStorage {
   async createAccessLog(insertLog: InsertAccessLog): Promise<AccessLog> {
     const id = this.accessLogId++;
     const now = new Date();
+    // Ensure recordId is always defined as null if not provided
+    const recordId = insertLog.recordId === undefined ? null : insertLog.recordId;
     const log: AccessLog = { 
-      ...insertLog, 
+      ...insertLog,
+      recordId,
       id,
       timestamp: now
     };
