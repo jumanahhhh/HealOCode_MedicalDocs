@@ -314,6 +314,7 @@ export default function PatientRecord({ patientId = 1 }: PatientRecordProps) {
                       fileUrl={prescription.image}
                       fileType="image/jpeg"
                       title={`Prescription - ${formatDate(prescription.scannedAt || prescription.createdAt)}`}
+                      recordId={prescription.id}
                     />
                   </CardContent>
                   

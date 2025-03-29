@@ -44,6 +44,7 @@ export function FileViewer({
 }: FileViewerProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isSummarizing, setIsSummarizing] = useState(false);
+  const [isProcessingOCR, setIsProcessingOCR] = useState(false);
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState('document');
   
@@ -101,6 +102,44 @@ export function FileViewer({
       });
     } finally {
       setIsSummarizing(false);
+    }
+  };
+  const handleProcessOCR = async () => {
+    if (!recordId) {
+      console.error('No recordId provided for OCR processing');
+      toast({
+        title: 'Error',
+        description: 'Cannot process image without a record ID.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setIsProcessingOCR(true);
+    try {
+      const response = await apiRequest('POST', `/api/prescriptions/${recordId}/process`);
+      const data = await response.json();
+      
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      // Log the extracted text to console
+      console.log('Extracted Text:', data.extractedText);
+
+      toast({
+        title: 'Success',
+        description: 'OCR processing completed successfully.',
+      });
+    } catch (error) {
+      console.error('Error processing OCR:', error);
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to process image.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsProcessingOCR(false);
     }
   };
   
@@ -175,7 +214,29 @@ export function FileViewer({
             </Button>
           </div>
         )}
-        
+        {isImage && (
+          <div className="flex justify-end mb-4">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleProcessOCR}
+              disabled={isProcessingOCR}
+              className="gap-2"
+            >
+              {isProcessingOCR ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <FileText className="h-4 w-4" />
+                  Extract Text
+                </>
+              )}
+            </Button>
+          </div>
+        )}
         {hasSummary ? (
           <Tabs defaultValue="document" className="mt-4">
             <TabsList>
