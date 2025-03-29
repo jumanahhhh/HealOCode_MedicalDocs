@@ -27,9 +27,10 @@ export const medicalRecords = pgTable("medical_records", {
   recordType: text("record_type").notNull(),
   content: json("content").notNull(),
   summary: text("summary"),
-  file: text("file"),  // PDF file path/data
+  file: text("file"),  // PDF file base64 data
   fileName: text("file_name"),
   fileType: text("file_type"),
+  fileUrl: text("file_url"),  // URL to the stored file
   createdBy: integer("created_by").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -102,6 +103,7 @@ export const insertMedicalRecordSchema = createInsertSchema(medicalRecords).pick
   file: true,
   fileName: true,
   fileType: true,
+  fileUrl: true,
   createdBy: true,
 });
 

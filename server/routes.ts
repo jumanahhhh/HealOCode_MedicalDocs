@@ -1,4 +1,4 @@
-import type { Express, Request, Response } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { 
@@ -11,8 +11,43 @@ import {
   insertAccessPermissionSchema 
 } from "@shared/schema";
 import { randomUUID } from "crypto";
+import * as fs from 'fs';
+import * as path from 'path';
+import { promises as fsPromises } from 'fs';
+import { exec } from "child_process";
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+const uploadFolder = path.join(__dirname, "uploads");
+const mkdirAsync = fsPromises.mkdir;
+const writeFileAsync = fsPromises.writeFile;
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Endpoint to process PDF and return summary
+app.post("/api/process-pdf", async (req: Request, res: Response) => {
+  try {
+    const fileName = req.body.fileName; // Get the file name from frontend
+    if (!fileName) {
+      return res.status(400).json({ error: "File name is required" });
+    }
+
+    const filePath = path.join(uploadFolder, fileName);
+    
+    // Run Python script
+    exec(`python3 process_pdf.py "${filePath}"`, (error, stdout, stderr) => {
+      if (error) {
+        console.error(`Error executing script: ${stderr}`);
+        return res.status(500).json({ error: "Failed to process PDF" });
+      }
+      res.json({ summary: stdout.trim() });
+    });
+  } catch (error) {
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
   // Users
   app.post('/api/auth/login', async (req: Request, res: Response) => {
     const { username, password } = req.body;
@@ -164,6 +199,87 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       // Handle file upload data along with other record data
       const recordData = insertMedicalRecordSchema.parse(req.body);
+      
+      // Save file to filesystem if provided
+      let fileUrl = null;
+      let summary = null;
+      if (recordData.file && recordData.fileName) {
+        // Create directory if it doesn't exist
+        const patientDir = path.join(process.cwd(), 'uploads', 'medical_records', `patient_${recordData.patientId}`);
+        try {
+          await mkdirAsync(patientDir, { recursive: true });
+        } catch (err) {
+          if ((err as NodeJS.ErrnoException).code !== 'EEXIST') {
+            throw err;
+          }
+        }
+        
+        // Generate unique filename
+        const fileExt = path.extname(recordData.fileName);
+        const safeFileName = `${recordData.recordType}_${Date.now()}${fileExt}`;
+        const filePath = path.join(patientDir, safeFileName);
+        
+        console.log('Processing PDF file:', {
+          fileName: recordData.fileName,
+          filePath,
+          fileExt
+        });
+        
+        // Remove the base64 prefix if present
+        let fileData = recordData.file;
+        if (fileData.includes('base64,')) {
+          fileData = fileData.split('base64,')[1];
+        }
+        
+        // Write file to disk
+        await writeFileAsync(filePath, Buffer.from(fileData, 'base64'));
+        
+        // Set the file URL to the public path
+        fileUrl = `/uploads/medical_records/patient_${recordData.patientId}/${safeFileName}`;
+        
+        // If it's a PDF, generate summary
+        if (fileExt.toLowerCase() === '.pdf') {
+          try {
+            console.log('Starting PDF summarization...');
+            const { spawn } = require('child_process');
+            const pythonProcess = spawn('python3', ['scripts/summarize_pdf.py', filePath]);
+            
+            let summaryData = '';
+            
+            pythonProcess.stdout.on('data', (data: Buffer) => {
+              console.log('Received summary data:', data.toString());
+              summaryData += data.toString();
+            });
+            
+            pythonProcess.stderr.on('data', (data: Buffer) => {
+              console.error('Python Error:', data.toString());
+            });
+            
+            await new Promise((resolve, reject) => {
+              pythonProcess.on('close', (code: number) => {
+                console.log('Python process exited with code:', code);
+                if (code === 0) {
+                  resolve(summaryData);
+                } else {
+                  reject(new Error(`Python process exited with code ${code}`));
+                }
+              });
+            });
+            
+            summary = summaryData;
+            console.log('Final summary:', summary);
+          } catch (error) {
+            console.error('Error generating summary:', error);
+            // Continue without summary if there's an error
+          }
+        }
+        
+        // Update record data with file URL and summary
+        recordData.fileUrl = fileUrl;
+        recordData.summary = summary;
+      }
+      
+      // Create record in database
       const record = await storage.createMedicalRecord(recordData);
       
       // Log access
@@ -176,25 +292,85 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       return res.status(201).json(record);
     } catch (error) {
-      return res.status(400).json({ message: 'Invalid record data', error });
+      console.error('Error creating medical record:', error);
+      return res.status(500).json({ error: 'Failed to create medical record' });
     }
   });
   
   app.post('/api/medical-records/:id/summarize', async (req: Request, res: Response) => {
-    const id = parseInt(req.params.id);
-    const { summary } = req.body;
-    
-    if (!summary) {
-      return res.status(400).json({ message: 'Summary is required' });
+    try {
+      const id = parseInt(req.params.id);
+      const record = await storage.getMedicalRecord(id);
+      
+      if (!record) {
+        return res.status(404).json({ message: 'Record not found' });
+      }
+
+      if (!record.fileUrl) {
+        return res.status(400).json({ message: 'No PDF file found for this record' });
+      }
+
+      // Get the full file path from the URL
+      const filePath = path.join(process.cwd(), 'uploads', record.fileUrl.replace(/^\//, ''));
+      const scriptPath = path.join(process.cwd(), 'server', 'scripts', 'summarize_pdf.py');
+      
+      console.log('Processing PDF file for summarization:', {
+        recordId: id,
+        filePath,
+        scriptPath,
+        currentDir: process.cwd()
+      });
+
+      // Check if files exist
+      try {
+        await fsPromises.access(filePath);
+        await fsPromises.access(scriptPath);
+        console.log('Both PDF and script files exist');
+      } catch (error) {
+        console.error('File access error:', error);
+        return res.status(500).json({ 
+          message: 'Required files not found',
+          error: error instanceof Error ? error.message : String(error)
+        });
+      }
+
+      // Run the Python script
+      const { spawn } = require('child_process');
+      const pythonProcess = spawn('python3', [scriptPath, filePath]);
+      
+      let summaryData = '';
+      
+      pythonProcess.stdout.on('data', (data: Buffer) => {
+        console.log('Received summary data:', data.toString());
+        summaryData += data.toString();
+      });
+      
+      pythonProcess.stderr.on('data', (data: Buffer) => {
+        console.error('Python Error:', data.toString());
+      });
+      
+      await new Promise((resolve, reject) => {
+        pythonProcess.on('close', (code: number) => {
+          console.log('Python process exited with code:', code);
+          if (code === 0) {
+            resolve(summaryData);
+          } else {
+            reject(new Error(`Python process exited with code ${code}`));
+          }
+        });
+      });
+
+      // Update the record with the new summary
+      const updatedRecord = await storage.updateMedicalRecordSummary(id, summaryData);
+      
+      return res.json(updatedRecord);
+    } catch (error) {
+      console.error('Error generating summary:', error);
+      return res.status(500).json({ 
+        message: 'Failed to generate summary',
+        error: error instanceof Error ? error.message : String(error)
+      });
     }
-    
-    const updatedRecord = await storage.updateMedicalRecordSummary(id, summary);
-    
-    if (!updatedRecord) {
-      return res.status(404).json({ message: 'Record not found' });
-    }
-    
-    return res.json(updatedRecord);
   });
   
   app.post('/api/medical-records/:id/verify', async (req: Request, res: Response) => {
@@ -231,6 +407,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
         prescriptionId
       });
       
+      // Save file to filesystem if provided
+      let imageUrl = null;
+      if (prescriptionData.image) {
+        // Create directory if it doesn't exist
+        const patientDir = path.join(process.cwd(), 'uploads', 'prescriptions', `patient_${prescriptionData.patientId}`);
+        try {
+          await mkdirAsync(patientDir, { recursive: true });
+        } catch (err) {
+          if ((err as NodeJS.ErrnoException).code !== 'EEXIST') {
+            throw err;
+          }
+        }
+        
+        // Generate unique filename
+        const safeFileName = `prescription_${prescriptionId}_${Date.now()}.jpg`;
+        const filePath = path.join(patientDir, safeFileName);
+        
+        // Remove the base64 prefix if present
+        let imageData = prescriptionData.image;
+        if (imageData.includes('base64,')) {
+          imageData = imageData.split('base64,')[1];
+        }
+        
+        // Write file to disk
+        await writeFileAsync(filePath, Buffer.from(imageData, 'base64'));
+        
+        // Set the image URL to the public path
+        imageUrl = `/uploads/prescriptions/patient_${prescriptionData.patientId}/${safeFileName}`;
+        
+        // Update prescription data with image URL instead of base64 data
+        prescriptionData.image = imageUrl;
+      }
+      
+      // Create prescription in database
       const prescription = await storage.createPrescription(prescriptionData);
       
       // Log access
@@ -243,6 +453,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       return res.status(201).json(prescription);
     } catch (error) {
+      console.error('Error saving prescription:', error);
       return res.status(400).json({ message: 'Invalid prescription data', error });
     }
   });
@@ -344,6 +555,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     
     return res.json(updatedPermission);
+  });
+
+  // AI Model Integration
+  app.post('/api/ai/process-file', async (req: Request, res: Response) => {
+    try {
+      const { fileType, fileData, patientId, operation } = req.body;
+      
+      if (!fileType || !fileData || !patientId || !operation) {
+        return res.status(400).json({ 
+          message: 'Missing required parameters (fileType, fileData, patientId, operation)' 
+        });
+      }
+      
+      // For now, return a successful response with placeholders
+      // This is a stub for the future AI integration
+      const response = {
+        success: true,
+        operation,
+        fileType,
+        patientId,
+        result: {
+          // This will be replaced with actual AI model response
+          processedData: operation === 'prescription_ocr' 
+            ? { 
+                extractedText: "Placeholder for actual OCR extraction",
+                medications: [
+                  { name: "Placeholder medication", dosage: "Placeholder dosage", frequency: "Placeholder frequency" }
+                ]
+              }
+            : {
+                summary: "Placeholder for AI-generated summary of this medical document."
+              },
+          confidence: 0.95,
+          processingTime: "1.2s"
+        }
+      };
+      
+      return res.json(response);
+    } catch (error) {
+      console.error('AI processing error:', error);
+      return res.status(500).json({ 
+        message: 'Error processing file with AI model',
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
   });
 
   const httpServer = createServer(app);

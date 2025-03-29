@@ -17,7 +17,7 @@ export function FileUpload({
   acceptedFileTypes,
   maxSizeMB,
   onFileSelect,
-  buttonText,
+  buttonText, 
   fileTypeDescription,
   isUploading = false,
   error,
@@ -43,8 +43,19 @@ export function FileUpload({
       return;
     }
 
-    // Validate file type by mimetype and extension
-    if (!file.type.match(acceptedFileTypes)) {
+    // Validate file type by mimetype
+    const validTypes = acceptedFileTypes.split(',').map(type => type.trim());
+    const isValidType = validTypes.some(type => {
+      if (type.startsWith('.')) {
+        // Handle file extensions
+        return file.name.toLowerCase().endsWith(type.toLowerCase());
+      } else {
+        // Handle MIME types
+        return file.type === type;
+      }
+    });
+
+    if (!isValidType) {
       setFileError(`Invalid file type. Please upload ${fileTypeDescription}.`);
       return;
     }
@@ -58,7 +69,9 @@ export function FileUpload({
       reader.onload = (e) => {
         const result = e.target?.result as string;
         setPreview(result);
-        onFileSelect(file, result);
+        // Ensure the base64 data is properly formatted
+        const base64Data = result.split(',')[1] || result;
+        onFileSelect(file, base64Data);
       };
       reader.readAsDataURL(file);
     } else {
@@ -66,7 +79,9 @@ export function FileUpload({
       const reader = new FileReader();
       reader.onload = (e) => {
         const result = e.target?.result as string;
-        onFileSelect(file, result);
+        // Ensure the base64 data is properly formatted
+        const base64Data = result.split(',')[1] || result;
+        onFileSelect(file, base64Data);
       };
       reader.readAsDataURL(file);
       setPreview(null);
@@ -93,7 +108,8 @@ export function FileUpload({
     }
   };
 
-  const handleClick = () => {
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent event bubbling
     fileInputRef.current?.click();
   };
 
@@ -120,8 +136,6 @@ export function FileUpload({
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-          onClick={selectedFile ? undefined : handleClick}
-          style={{ cursor: selectedFile ? 'default' : 'pointer' }}
         >
           <input
             type="file"

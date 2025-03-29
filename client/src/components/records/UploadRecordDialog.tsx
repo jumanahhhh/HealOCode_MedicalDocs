@@ -85,6 +85,25 @@ export function UploadRecordDialog({ patientId, userId, uploadType }: UploadReco
   });
 
   const handleFileSelect = (file: File, base64: string) => {
+    console.log('File Details:', {
+      name: file.name,
+      type: file.type,
+      size: `${(file.size / 1024 / 1024).toFixed(2)}MB`,
+      acceptedTypes: isMedicalRecord ? "application/pdf" : "image/jpeg,image/png"
+    });
+    
+    // Validate file type manually
+    const validImageTypes = ['image/jpeg', 'image/png', 'image/jpg'];
+    const isValidType = isMedicalRecord 
+      ? file.type === 'application/pdf'
+      : validImageTypes.includes(file.type.toLowerCase());
+  
+    if (!isValidType) {
+      console.error('Invalid file type detected:', file.type);
+      setUploadError(`Invalid file type. Please upload a ${isMedicalRecord ? 'PDF' : 'JPEG or PNG'} file.`);
+      return;
+    }
+  
     setUploadedFile({ file, base64 });
     setUploadError(null);
   };
@@ -121,6 +140,7 @@ export function UploadRecordDialog({ patientId, userId, uploadType }: UploadReco
           patientId,
           image: uploadedFile.base64,
           createdBy: userId,
+          notes: values.notes
         });
 
         // Invalidate prescriptions query cache
@@ -139,7 +159,7 @@ export function UploadRecordDialog({ patientId, userId, uploadType }: UploadReco
       setIsOpen(false);
     } catch (error) {
       console.error('Upload error:', error);
-      setUploadError('An error occurred during upload. Please try again.');
+      setUploadError(error instanceof Error ? error.message : 'An error occurred during upload. Please try again.');
     } finally {
       setIsUploading(false);
     }
@@ -168,8 +188,8 @@ export function UploadRecordDialog({ patientId, userId, uploadType }: UploadReco
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
-            <FileUpload
-              acceptedFileTypes={isMedicalRecord ? ".pdf,application/pdf" : ".jpg,.jpeg,.png,image/jpeg,image/png"}
+          <FileUpload
+              acceptedFileTypes={isMedicalRecord ? "application/pdf" : ".jpg,.jpeg,.png,image/jpeg,image/png"}
               maxSizeMB={10}
               onFileSelect={handleFileSelect}
               buttonText={`Select ${isMedicalRecord ? 'PDF' : 'Image'}`}

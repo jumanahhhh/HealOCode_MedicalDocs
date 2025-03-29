@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useState, useEffect } from 'react';
+import { useQuery, UseQueryOptions } from '@tanstack/react-query';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -17,6 +17,7 @@ interface PatientRecordProps {
 
 export default function PatientRecord({ patientId = 1 }: PatientRecordProps) {
   const [activeTab, setActiveTab] = useState<string>('medicalRecords');
+  const [medicalRecords, setMedicalRecords] = useState<MedicalRecordType[]>([]);
   const userId = 1; // Mock user ID (normally from auth context)
 
   // Define types for data
@@ -69,6 +70,13 @@ export default function PatientRecord({ patientId = 1 }: PatientRecordProps) {
     enabled: !!patientId,
   });
 
+  // Update medical records state when query data changes
+  useEffect(() => {
+    if (medicalRecordsQuery.data) {
+      setMedicalRecords(medicalRecordsQuery.data);
+    }
+  }, [medicalRecordsQuery.data]);
+
   // Fetch prescriptions
   const prescriptionsQuery = useQuery<PrescriptionType[]>({
     queryKey: [`/api/patients/${patientId}/prescriptions`],
@@ -79,7 +87,6 @@ export default function PatientRecord({ patientId = 1 }: PatientRecordProps) {
   const isError = patientQuery.isError || medicalRecordsQuery.isError || prescriptionsQuery.isError;
 
   const patient = patientQuery.data;
-  const medicalRecords = medicalRecordsQuery.data || [];
   const prescriptions = prescriptionsQuery.data || [];
 
   if (isError) {
@@ -233,6 +240,15 @@ export default function PatientRecord({ patientId = 1 }: PatientRecordProps) {
                       fileType="application/pdf"
                       title={`${record.recordType.replace('_', ' ')} - ${formatDate(record.createdAt)}`}
                       description={record.content?.notes}
+                      recordId={record.id}
+                      summary={record.summary}
+                      onSummaryUpdate={(newSummary) => {
+                        // Update the record's summary in the UI
+                        const updatedRecords = medicalRecords.map((r: any) => 
+                          r.id === record.id ? { ...r, summary: newSummary } : r
+                        );
+                        setMedicalRecords(updatedRecords);
+                      }}
                     />
                   </CardContent>
                 </Card>
