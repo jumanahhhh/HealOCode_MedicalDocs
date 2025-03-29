@@ -113,6 +113,7 @@ router.post('/medical-records/:recordId/summarize', async (req, res) => {
   }
 });
 
+
 router.post('/prescriptions/:prescriptionId/process', async (req, res) => {
   const { prescriptionId } = req.params;
   

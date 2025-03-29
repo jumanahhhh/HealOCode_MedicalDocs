@@ -1,83 +1,89 @@
-from flask import Flask, request, jsonify
-from flask_cors import CORS
-import pandas as pd
 import os
-import sys
-from pathlib import Path
-
-# Add the scripts directory to Python path
-scripts_dir = Path(__file__).parent.parent / "scripts"
-sys.path.append(str(scripts_dir))
-
-from summarise_pdf import MedicalPDFSummarizer
+import json
+import hashlib
+import time
+from flask import Flask, request, jsonify
 
 app = Flask(__name__)
-CORS(app)  # Allow cross-origin requests
+UPLOAD_FOLDER = 'uploads'
+BLOCKCHAIN_FILE = 'blockchain.json'
 
-UPLOAD_FOLDER = "uploads"
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+if not os.path.exists(UPLOAD_FOLDER):
+    os.makedirs(UPLOAD_FOLDER)
 
-@app.route('/process_excel', methods=['POST'])
-def process_excel():
+def calculate_hash(data):
+    return hashlib.sha256(data.encode()).hexdigest()
+
+class Block:
+    def __init__(self, index, timestamp, file_hash, previous_hash):
+        self.index = index
+        self.timestamp = timestamp
+        self.file_hash = file_hash
+        self.previous_hash = previous_hash
+        self.hash = self.calculate_block_hash()
+
+    def calculate_block_hash(self):
+        data = f"{self.index}{self.timestamp}{self.file_hash}{self.previous_hash}"
+        return calculate_hash(data)
+
+    def to_dict(self):
+        return {
+            "index": self.index,
+            "timestamp": self.timestamp,
+            "file_hash": self.file_hash,
+            "previous_hash": self.previous_hash,
+            "hash": self.hash
+        }
+
+class Blockchain:
+    def __init__(self):
+        self.chain = self.load_blockchain()
+
+    def load_blockchain(self):
+        if os.path.exists(BLOCKCHAIN_FILE):
+            with open(BLOCKCHAIN_FILE, 'r') as f:
+                return json.load(f)
+        return [self.create_genesis_block()]
+
+    def create_genesis_block(self):
+        genesis_block = Block(0, time.time(), "GENESIS_HASH", "0").to_dict()
+        self.save_blockchain([genesis_block])
+        return genesis_block
+
+    def add_block(self, file_hash):
+        previous_block = self.chain[-1]
+        new_block = Block(len(self.chain), time.time(), file_hash, previous_block['hash'])
+        self.chain.append(new_block.to_dict())
+        self.save_blockchain(self.chain)
+        return new_block.to_dict()
+
+    def save_blockchain(self, chain):
+        with open(BLOCKCHAIN_FILE, 'w') as f:
+            json.dump(chain, f, indent=4)
+
+blockchain = Blockchain()
+
+@app.route('/upload', methods=['POST'])
+def upload_file():
     if 'file' not in request.files:
-        return jsonify({"error": "No file provided"}), 400
+        return jsonify({"error": "No file uploaded"}), 400
     
     file = request.files['file']
     if file.filename == '':
         return jsonify({"error": "No selected file"}), 400
-
-    filepath = os.path.join(UPLOAD_FOLDER, file.filename)
-    file.save(filepath)
-
-    try:
-        # Read the Excel file
-        df = pd.read_excel(filepath)
-        data_summary = df.describe().to_dict()  # Example processing
-
-        return jsonify({"message": "File processed successfully", "summary": data_summary})
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    finally:
-        os.remove(filepath)  # Clean up after processing
-
-@app.route('/process_pdf', methods=['POST'])
-def process_pdf():
-    if 'file' not in request.files:
-        return jsonify({"error": "No file provided"}), 400
     
-    file = request.files['file']
-    if file.filename == '':
-        return jsonify({"error": "No selected file"}), 400
+    file_path = os.path.join(UPLOAD_FOLDER, file.filename)
+    file.save(file_path)
     
-    if not file.filename.lower().endswith('.pdf'):
-        return jsonify({"error": "File must be a PDF"}), 400
+    with open(file_path, 'rb') as f:
+        file_hash = calculate_hash(f.read().hex())
+    
+    block = blockchain.add_block(file_hash)
+    return jsonify({"message": "File uploaded and block added", "block": block})
 
-    filepath = os.path.join(UPLOAD_FOLDER, file.filename)
-    file.save(filepath)
-
-    try:
-        # Initialize the summarizer
-        summarizer = MedicalPDFSummarizer()
-        
-        # Extract text from PDF
-        medical_text = summarizer.extract_text_from_pdf(filepath)
-        
-        if not medical_text:
-            return jsonify({"error": "Failed to extract text from PDF"}), 500
-        
-        # Generate both summaries
-        patient_summary = summarizer.generate_patient_summary(medical_text)
-        doctor_summary = summarizer.generate_doctor_summary(medical_text)
-        
-        return jsonify({
-            "message": "PDF processed successfully",
-            "patient_summary": patient_summary,
-            "doctor_summary": doctor_summary
-        })
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    finally:
-        os.remove(filepath)  # Clean up after processing
+@app.route('/blockchain', methods=['GET'])
+def get_blockchain():
+    return jsonify(blockchain.chain)
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5001)  # Run Flask on port 5001
+    app.run(debug=True)

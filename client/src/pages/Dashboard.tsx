@@ -15,7 +15,7 @@ export default function Dashboard() {
         <Sidebar />
         <main className="flex-1 p-4 sm:p-6 lg:p-8">
           <div className="mb-8">
-            <h2 className="text-2xl font-serif font-bold text-neutral-800">Patient Dashboard</h2>
+            <h2 className="text-2xl font-serif font-bold text-neutral-800">Doctor's Dashboard</h2>
             <p className="text-neutral-500">Manage records, prescriptions, and documentation</p>
           </div>
           

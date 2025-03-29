@@ -47,6 +47,7 @@ export function FileViewer({
   const [isProcessingOCR, setIsProcessingOCR] = useState(false);
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState('document');
+  const [extractedText, setExtractedText] = useState<string | null>(null);
   
   const isPdf = fileType.includes('pdf');
   const isImage = fileType.includes('image');
@@ -124,8 +125,8 @@ export function FileViewer({
         throw new Error(data.error);
       }
 
-      // Log the extracted text to console
-      console.log('Extracted Text:', data.extractedText);
+      // Update the state with extracted text instead of console.log
+      setExtractedText(data.extractedText);
 
       toast({
         title: 'Success',
@@ -191,112 +192,137 @@ export function FileViewer({
           {description && <DialogDescription>{description}</DialogDescription>}
         </DialogHeader>
         
-        {isPdf && (
-          <div className="flex justify-end mb-4">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleSummarize}
-              disabled={isSummarizing}
-              className="gap-2"
-            >
-              {isSummarizing ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Summarizing...
-                </>
-              ) : (
-                <>
-                  <ScrollText className="h-4 w-4" />
-                  Generate Summary
-                </>
-              )}
-            </Button>
-          </div>
-        )}
-        {isImage && (
-          <div className="flex justify-end mb-4">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleProcessOCR}
-              disabled={isProcessingOCR}
-              className="gap-2"
-            >
-              {isProcessingOCR ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Processing...
-                </>
-              ) : (
-                <>
-                  <FileText className="h-4 w-4" />
-                  Extract Text
-                </>
-              )}
-            </Button>
-          </div>
-        )}
-        {hasSummary ? (
-          <Tabs defaultValue="document" className="mt-4">
-            <TabsList>
-              <TabsTrigger value="document">Document</TabsTrigger>
-              <TabsTrigger value="summary">Summary</TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="document" className="mt-4">
-              <iframe 
-                src={`${fileUrl}#toolbar=0&navpanes=0&scrollbar=0`} 
-                className="w-full h-[70vh]"
-                title={fileName}
-              />
-            </TabsContent>
-            
-            <TabsContent value="summary" className="mt-4">
-              <div className="bg-muted p-4 rounded-lg">
-                <div className="flex items-center gap-2 mb-2">
-                  <ScrollText className="h-4 w-4" />
-                  <h4 className="font-medium">AI-Generated Summary</h4>
-                </div>
-                <div className="prose prose-sm max-w-none">
-                  {summary}
-                </div>
-              </div>
-            </TabsContent>
-          </Tabs>
-        ) : (
-          <div className={`mt-2 ${isPdf ? "h-[80vh]" : ""}`}>
-            {isImage ? (
-              <img 
-                src={fileUrl} 
-                alt={fileName} 
-                className="max-w-full mx-auto object-contain" 
-              />
-            ) : isPdf ? (
-              <iframe 
-                src={`${fileUrl}#toolbar=0&navpanes=0&scrollbar=0`} 
-                className="w-full h-full"
-                title={fileName}
-              />
-            ) : (
-              <div className="flex flex-col items-center justify-center p-12 bg-muted rounded">
-                <FileText className="h-16 w-16 text-muted-foreground mb-4" />
-                <p className="text-center">
-                  This file type cannot be previewed. Please download the file to view it.
-                </p>
-                <Button 
-                  variant="default" 
-                  size="sm" 
-                  className="mt-4 gap-1"
-                  onClick={handleDownload}
+        <div className="max-h-[80vh] overflow-y-auto">
+          {isPdf && (
+            <div className="flex justify-end mb-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleSummarize}
+                disabled={isSummarizing}
+                className="gap-2"
+              >
+                {isSummarizing ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Summarizing...
+                  </>
+                ) : (
+                  <>
+                    <ScrollText className="h-4 w-4" />
+                    Generate Summary
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
+          {isImage && (
+            <>
+              <div className="flex justify-end mb-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleProcessOCR}
+                  disabled={isProcessingOCR}
+                  className="gap-2"
                 >
-                  <Download className="h-4 w-4" />
-                  Download
+                  {isProcessingOCR ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <FileText className="h-4 w-4" />
+                      Extract Text
+                    </>
+                  )}
                 </Button>
               </div>
-            )}
-          </div>
-        )}
+
+              <div className="space-y-4">
+                <img 
+                  src={fileUrl} 
+                  alt={fileName} 
+                  className="max-w-full mx-auto object-contain rounded-lg" 
+                />
+
+                {extractedText && (
+                  <div className="bg-muted p-4 rounded-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                      <FileText className="h-4 w-4" />
+                      <h4 className="font-medium">Extracted Text</h4>
+                    </div>
+                    <div className="prose prose-sm max-w-none whitespace-pre-wrap">
+                      {extractedText}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+          
+          {hasSummary ? (
+            <Tabs defaultValue="document" className="mt-4">
+              <TabsList>
+                <TabsTrigger value="document">Document</TabsTrigger>
+                <TabsTrigger value="summary">Summary</TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="document" className="mt-4">
+                <iframe 
+                  src={`${fileUrl}#toolbar=0&navpanes=0&scrollbar=0`} 
+                  className="w-full h-[70vh]"
+                  title={fileName}
+                />
+              </TabsContent>
+              
+              <TabsContent value="summary" className="mt-4">
+                <div className="bg-muted p-4 rounded-lg h-[70vh] overflow-y-auto">
+                  <div className="flex items-center gap-2 mb-2">
+                    <ScrollText className="h-4 w-4" />
+                    <h4 className="font-medium">AI-Generated Summary</h4>
+                  </div>
+                  <div className="prose prose-sm max-w-none whitespace-pre-wrap">
+                    {summary}
+                  </div>
+                </div>
+              </TabsContent>
+            </Tabs>
+          ) : (
+            <div className={`mt-2 ${isPdf ? "h-[80vh]" : ""}`}>
+              {isImage ? (
+                <img 
+                  src={fileUrl} 
+                  alt={fileName} 
+                  className="max-w-full mx-auto object-contain" 
+                />
+              ) : isPdf ? (
+                <iframe 
+                  src={`${fileUrl}#toolbar=0&navpanes=0&scrollbar=0`} 
+                  className="w-full h-full"
+                  title={fileName}
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center p-12 bg-muted rounded">
+                  <FileText className="h-16 w-16 text-muted-foreground mb-4" />
+                  <p className="text-center">
+                    This file type cannot be previewed. Please download the file to view it.
+                  </p>
+                  <Button 
+                    variant="default" 
+                    size="sm" 
+                    className="mt-4 gap-1"
+                    onClick={handleDownload}
+                  >
+                    <Download className="h-4 w-4" />
+                    Download
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   );
